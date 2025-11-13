@@ -20,19 +20,13 @@ def get_past_launches():
             existing_df = pd.read_csv(save_path)
             seen_ids = set(existing_df['id'].astype(str))
             
-            # --- EFFICIENT RESUME FIX: FIND LATEST DATE ---
-            # 1. Ensure 'net' column is available and valid
             if 'net' in existing_df.columns and not existing_df['net'].empty:
                 existing_df['net_datetime'] = pd.to_datetime(existing_df['net'], errors='coerce', utc=True)
                 latest_net_date = existing_df['net_datetime'].max()
-                
-                # 2. Use the latest date as the new starting point for the API query
-                # We use one second after the latest date to ensure no overlaps
+
                 if pd.notna(latest_net_date):
-                    # Add one second to the latest time and format for the API
                     date_start = (latest_net_date + datetime.timedelta(seconds=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
                     print(f"Resuming collection from: {date_start}")
-            # -----------------------------------------------
     else:
         existing_df = pd.DataFrame()
 
@@ -58,6 +52,9 @@ def get_past_launches():
 
     results = []
 
+    new_launches_count = 0
+    report_milestone = 100
+
     while base_url:
         response = requests.get(base_url, params=params)
         if response.status_code != 200:
@@ -65,6 +62,7 @@ def get_past_launches():
             break
 
         data = response.json()
+
         for launch in data['results']:
             launch_id = str(launch.get("id"))
             if launch_id in seen_ids:
@@ -73,8 +71,8 @@ def get_past_launches():
             results.append({
                 "id": launch_id,
                 "name": launch.get("name"),
-                "status": launch.get("status", {}).get("name"),  # Target variable (Success / Failure)
-                "net": launch.get("net"),  # Scheduled datetime
+                "status": launch.get("status", {}).get("name"),
+                "net": launch.get("net"),
                 "window_start": launch.get("window_start"),
                 "window_end": launch.get("window_end"),
                 "is_crewed": launch.get("is_crewed"),
@@ -98,8 +96,19 @@ def get_past_launches():
             })
             seen_ids.add(launch_id)
 
+        launches_added_this_run = len(data['results'])
+        new_launches_count += launches_added_this_run
+
+        if launches_added_this_run > 0:
+            new_launches_count += launches_added_this_run
+
+            if new_launches_count >= report_milestone:
+                print(f"✅ SESSION PROGRESS: Collected {new_launches_count} new launches so far...")
+                report_milestone += 100
+
+
         base_url = data.get("next")
-        params = {}  # only use filters on the first call
+        params = {}
         time.sleep(1)
 
     # Save to CSV
@@ -113,7 +122,3 @@ def get_past_launches():
 
 if __name__ == "__main__":
     get_past_launches()
-# For automation, uncomment:
-# while True:
-#     get_past_launches()
-#     time.sleep(3600)
