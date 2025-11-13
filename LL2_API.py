@@ -10,11 +10,37 @@ def get_past_launches():
 
     # Format dates
     date_now = now.strftime('%Y-%m-%dT%H:%M:%SZ')
-    date_month_ago = "1957-01-01T00:00:00Z"
+    date_start = "1957-01-01T00:00:00Z"
+
+    # CSV resume logic
+    save_path = "launch_data.csv"
+    seen_ids = set()
+
+    if os.path.exists(save_path):
+            existing_df = pd.read_csv(save_path)
+            seen_ids = set(existing_df['id'].astype(str))
+            
+            # --- EFFICIENT RESUME FIX: FIND LATEST DATE ---
+            # 1. Ensure 'net' column is available and valid
+            if 'net' in existing_df.columns and not existing_df['net'].empty:
+                existing_df['net_datetime'] = pd.to_datetime(existing_df['net'], errors='coerce', utc=True)
+                latest_net_date = existing_df['net_datetime'].max()
+                
+                # 2. Use the latest date as the new starting point for the API query
+                # We use one second after the latest date to ensure no overlaps
+                if pd.notna(latest_net_date):
+                    # Add one second to the latest time and format for the API
+                    date_start = (latest_net_date + datetime.timedelta(seconds=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+                    print(f"Resuming collection from: {date_start}")
+            # -----------------------------------------------
+    else:
+        existing_df = pd.DataFrame()
+
+
 
     base_url = "https://ll.thespacedevs.com/2.3.0/launches/"
     params = {
-        'net__gte': date_month_ago,
+        'net__gte': date_start,
         'net__lte': date_now,
         'limit': 100,
         'ordering': 'net',
