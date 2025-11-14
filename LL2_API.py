@@ -1,7 +1,6 @@
 import requests
 import datetime
 import time
-import json
 import os
 import pandas as pd
 
@@ -53,7 +52,6 @@ def get_past_launches():
     results = []
 
     new_launches_count = 0
-    report_milestone = 100
 
     while base_url:
         response = requests.get(base_url, params=params)
@@ -87,7 +85,7 @@ def get_past_launches():
 
                 # Mission details
                 "mission_type": launch.get("mission", {}).get("type") if launch.get("mission") else None,
-                "orbit": launch.get("mission", {}).get("orbit", {}).get("name") if launch.get("mission") else None,
+                "orbit": launch.get("mission").get("orbit").get("name") if launch.get("mission") and launch.get("mission").get("orbit") else None,
 
                 # Location info
                 "pad_name": launch.get("pad", {}).get("name"),
@@ -95,17 +93,10 @@ def get_past_launches():
                 "location_country": launch.get("pad", {}).get("location", {}).get("country_code"),
             })
             seen_ids.add(launch_id)
+            new_launches_count += 1
 
-        launches_added_this_run = len(data['results'])
-        new_launches_count += launches_added_this_run
-
-        if launches_added_this_run > 0:
-            new_launches_count += launches_added_this_run
-
-            if new_launches_count >= report_milestone:
-                print(f"✅ SESSION PROGRESS: Collected {new_launches_count} new launches so far...")
-                report_milestone += 100
-
+        if new_launches_count > 0:
+            print(f"Fetched {new_launches_count} new launches, total so far: {len(results)}")
 
         base_url = data.get("next")
         params = {}
